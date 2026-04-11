@@ -1,0 +1,3 @@
+# Exe derlemesi: Python 3.11+ onerilir (3.10.0 + PyInstaller, bottle analizinde dis modulu hatasi)
+pywebview>=5.0
+pyinstaller>=6.0

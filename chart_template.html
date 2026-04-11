@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TradingView</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    body[data-theme="dark"] {
+      background: #131722;
+    }
+    body[data-theme="light"] {
+      background: #ffffff;
+    }
+    #app {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      box-sizing: border-box;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--chrome-border);
+    }
+    body[data-theme="dark"] {
+      --chrome-bar: #1e222d;
+      --chrome-border: rgba(255, 255, 255, 0.08);
+      --chrome-text: #d1d4dc;
+      --chrome-muted: #787b86;
+      --chrome-hover: #363a45;
+      --chrome-close-hover: rgba(232, 74, 95, 0.25);
+    }
+    body[data-theme="light"] {
+      --chrome-bar: #f0f3fa;
+      --chrome-border: rgba(0, 0, 0, 0.1);
+      --chrome-text: #131722;
+      --chrome-muted: #787b86;
+      --chrome-hover: #e5e9f0;
+      --chrome-close-hover: rgba(232, 74, 95, 0.2);
+    }
+    .titlebar {
+      flex: 0 0 28px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 4px 0 8px;
+      background: var(--chrome-bar);
+      box-shadow: inset 0 -1px 0 var(--chrome-border);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .titlebar .brand {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--chrome-muted);
+    }
+    .titlebar .symbol-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--chrome-text);
+      max-width: 42%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .titlebar .drag-spacer {
+      flex: 1;
+      min-width: 12px;
+      align-self: stretch;
+    }
+    .btn-close {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 26px;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--chrome-muted);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-close:hover {
+      background: var(--chrome-close-hover);
+      color: var(--chrome-text);
+    }
+    .btn-plus {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 26px;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--chrome-muted);
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-plus:hover {
+      background: var(--chrome-hover);
+      color: var(--chrome-text);
+    }
+    .chart-wrap {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+    .resize-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 200;
+      pointer-events: none;
+    }
+    .resize-handle {
+      position: absolute;
+      pointer-events: auto;
+      box-sizing: border-box;
+      touch-action: none;
+    }
+    .resize-n {
+      top: 0;
+      left: 14px;
+      right: 14px;
+      height: 12px;
+      cursor: ns-resize;
+      z-index: 1;
+    }
+    .resize-s {
+      bottom: 0;
+      left: 14px;
+      right: 14px;
+      height: 12px;
+      cursor: ns-resize;
+      z-index: 1;
+    }
+    .resize-w {
+      left: 0;
+      top: 14px;
+      bottom: 14px;
+      width: 12px;
+      cursor: ew-resize;
+      z-index: 1;
+    }
+    .resize-e {
+      right: 0;
+      top: 14px;
+      bottom: 14px;
+      width: 12px;
+      cursor: ew-resize;
+      z-index: 1;
+    }
+    .resize-nw {
+      top: 0;
+      left: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 2;
+    }
+    .resize-ne {
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nesw-resize;
+      z-index: 2;
+    }
+    .resize-sw {
+      bottom: 0;
+      left: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nesw-resize;
+      z-index: 2;
+    }
+    .resize-se {
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body data-theme="__THEME__">
+  <div id="app">
+    <header class="titlebar">
+      <span class="brand pywebview-drag-region">TradingView</span>
+      <div class="drag-spacer pywebview-drag-region" aria-hidden="true"></div>
+      <button type="button" class="btn-plus" id="btn-plus" title="Yeni grafik" aria-label="Yeni grafik">+</button>
+      <button type="button" class="btn-close" id="btn-close" title="Kapat" aria-label="Kapat">×</button>
+    </header>
+    <main class="chart-wrap">
+      <div class="tradingview-widget-container" style="height:100%;width:100%">
+        <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+        <script
+          type="text/javascript"
+          src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+          async
+        >
+__WIDGET_CONFIG_JSON__
+        </script>
+      </div>
+    </main>
+    <div class="resize-layer" aria-hidden="true">
+      <div class="resize-handle resize-n" data-resize="n" title="Boyutlandır"></div>
+      <div class="resize-handle resize-s" data-resize="s" title="Boyutlandır"></div>
+      <div class="resize-handle resize-w" data-resize="w" title="Boyutlandır"></div>
+      <div class="resize-handle resize-e" data-resize="e" title="Boyutlandır"></div>
+      <div class="resize-handle resize-nw" data-resize="nw" title="Boyutlandır"></div>
+      <div class="resize-handle resize-ne" data-resize="ne" title="Boyutlandır"></div>
+      <div class="resize-handle resize-sw" data-resize="sw" title="Boyutlandır"></div>
+      <div class="resize-handle resize-se" data-resize="se" title="Boyutlandır"></div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      function ready(fn) {
+        if (window.pywebview && window.pywebview.api) fn();
+        else window.addEventListener("pywebviewready", fn);
+      }
+      ready(function () {
+        document.getElementById("btn-plus").addEventListener("click", function () {
+          window.pywebview.api.open_another_chart();
+        });
+        document.getElementById("btn-close").addEventListener("click", function () {
+          window.pywebview.api.close_window();
+        });
+
+        var FIX = { se: 3, s: 3, e: 3, sw: 4, w: 4, ne: 8, n: 8, nw: 12 };
+        var state = null;
+        var CAP_OPTS = { capture: true };
+        function applyResize(screenX, screenY) {
+          if (!state || state.init) return;
+          var dx = screenX - state.startX;
+          var dy = screenY - state.startY;
+          var dw = 0;
+          var dh = 0;
+          switch (state.mode) {
+            case "se":
+              dw = dx;
+              dh = dy;
+              break;
+            case "s":
+              dw = 0;
+              dh = dy;
+              break;
+            case "e":
+              dw = dx;
+              dh = 0;
+              break;
+            case "sw":
+              dw = -dx;
+              dh = dy;
+              break;
+            case "w":
+              dw = -dx;
+              dh = 0;
+              break;
+            case "ne":
+              dw = dx;
+              dh = -dy;
+              break;
+            case "n":
+              dw = 0;
+              dh = -dy;
+              break;
+            case "nw":
+              dw = -dx;
+              dh = -dy;
+              break;
+            default:
+              return;
+          }
+          var nw = Math.max(state.minW, state.w + dw);
+          var nh = Math.max(state.minH, state.h + dh);
+          window.pywebview.api.resize_window(nw, nh, FIX[state.mode]);
+        }
+        function detachGlobalListeners() {
+          window.removeEventListener("pointermove", onPointerMove, CAP_OPTS);
+          window.removeEventListener("pointerup", onPointerEnd, CAP_OPTS);
+          window.removeEventListener("pointercancel", onPointerEnd, CAP_OPTS);
+          window.removeEventListener("mousemove", onMouseMove, CAP_OPTS);
+          window.removeEventListener("mouseup", onMouseUp, CAP_OPTS);
+          window.removeEventListener("blur", onWindowBlur, CAP_OPTS);
+        }
+        function releaseCaptureIfAny(el, pointerId) {
+          if (el && pointerId != null && el.releasePointerCapture) {
+            try {
+              if (el.hasPointerCapture && el.hasPointerCapture(pointerId)) {
+                el.releasePointerCapture(pointerId);
+              }
+            } catch (_) {}
+          }
+        }
+        function endResize(el, pointerId) {
+          detachGlobalListeners();
+          releaseCaptureIfAny(el, pointerId);
+          state = null;
+        }
+        function onPointerMove(e) {
+          if (!state || e.pointerId !== state.pointerId) return;
+          applyResize(e.screenX, e.screenY);
+        }
+        function onPointerEnd(e) {
+          if (!state || e.pointerId !== state.pointerId) return;
+          endResize(state.captureEl, state.pointerId);
+        }
+        function onMouseMove(e) {
+          if (!state || state.usePointer) return;
+          applyResize(e.screenX, e.screenY);
+        }
+        function onMouseUp(e) {
+          if (!state || state.usePointer || e.button !== 0) return;
+          endResize(state.captureEl, null);
+        }
+        function onWindowBlur() {
+          if (state) endResize(state.captureEl, state.pointerId);
+        }
+        document.querySelectorAll(".resize-handle").forEach(function (el) {
+          function beginResize(e, usePointer, pointerId) {
+            if (typeof e.button === "number" && e.button !== 0) return;
+            var mode = el.getAttribute("data-resize");
+            if (!mode || !FIX[mode]) return;
+            if (state) endResize(state.captureEl, state.pointerId);
+            e.preventDefault();
+            e.stopPropagation();
+
+            state = {
+              init: true,
+              startX: e.screenX,
+              startY: e.screenY,
+              mode: mode,
+              pointerId: pointerId,
+              captureEl: el,
+              usePointer: usePointer
+            };
+
+            window.addEventListener("blur", onWindowBlur, CAP_OPTS);
+            if (usePointer && pointerId != null) {
+              try {
+                el.setPointerCapture(pointerId);
+              } catch (_) {}
+              window.addEventListener("pointermove", onPointerMove, CAP_OPTS);
+              window.addEventListener("pointerup", onPointerEnd, CAP_OPTS);
+              window.addEventListener("pointercancel", onPointerEnd, CAP_OPTS);
+            } else {
+              window.addEventListener("mousemove", onMouseMove, CAP_OPTS);
+              window.addEventListener("mouseup", onMouseUp, CAP_OPTS);
+            }
+
+            Promise.all([
+              window.pywebview.api.get_window_size(),
+              window.pywebview.api.get_min_size()
+            ]).then(function (arr) {
+              if (!state || !state.init || state.mode !== mode) return;
+              var wh = arr[0];
+              var mn = arr[1];
+              state.w = wh[0];
+              state.h = wh[1];
+              state.minW = mn[0];
+              state.minH = mn[1];
+              state.init = false;
+            });
+          }
+
+          if (window.PointerEvent) {
+            el.addEventListener("pointerdown", function (e) {
+              beginResize(e, true, e.pointerId);
+            });
+            el.addEventListener("lostpointercapture", function (ev) {
+              if (
+                !state ||
+                !state.usePointer ||
+                ev.pointerId !== state.pointerId ||
+                state.captureEl !== el
+              ) {
+                return;
+              }
+              endResize(el, ev.pointerId);
+            });
+          } else {
+            el.addEventListener("mousedown", function (e) {
+              beginResize(e, false, null);
+            });
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
