@@ -6,6 +6,7 @@ Widget: https://www.tradingview.com/widget-docs/widgets/charts/advanced-chart/
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import sys
 import tempfile
@@ -16,6 +17,163 @@ import webview
 from webview.window import FixPoint
 
 _LAUNCH_CFG: dict[str, Any] = {}
+
+_FIX_NW = FixPoint.NORTH | FixPoint.WEST
+
+
+def _split_total(total: int, parts: int) -> list[int]:
+    if parts <= 0:
+        return []
+    base = total // parts
+    rem = total % parts
+    return [base + (1 if i < rem else 0) for i in range(parts)]
+
+
+def _primary_work_area() -> tuple[int, int, int, int]:
+    """Birincil ekranın çalışma alanı (x, y, genişlik, yükseklik)."""
+    if sys.platform == "win32":
+        class _RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long),
+                ("top", ctypes.c_long),
+                ("right", ctypes.c_long),
+                ("bottom", ctypes.c_long),
+            ]
+
+        r = _RECT()
+        SPI_GETWORKAREA = 48
+        if ctypes.windll.user32.SystemParametersInfoW(
+            SPI_GETWORKAREA, 0, ctypes.byref(r), 0
+        ):
+            return (r.left, r.top, r.right - r.left, r.bottom - r.top)
+    try:
+        import tkinter as tk
+
+        root = tk.Tk()
+        root.withdraw()
+        w = root.winfo_screenwidth()
+        h = root.winfo_screenheight()
+        root.destroy()
+        return (0, 0, w, h)
+    except Exception:
+        return (0, 0, 1920, 1080)
+
+
+def _work_area_for_window(ref: webview.Window | None) -> tuple[int, int, int, int]:
+    """Pencerenin üzerinde bulunduğu monitörün çalışma alanı (çoklu ekran)."""
+    if sys.platform != "win32":
+        return _primary_work_area()
+
+    class _RECT(ctypes.Structure):
+        _fields_ = [
+            ("left", ctypes.c_long),
+            ("top", ctypes.c_long),
+            ("right", ctypes.c_long),
+            ("bottom", ctypes.c_long),
+        ]
+
+    class _POINT(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+    class _MONITORINFOEX(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", ctypes.c_ulong),
+            ("rcMonitor", _RECT),
+            ("rcWork", _RECT),
+            ("dwFlags", ctypes.c_ulong),
+            ("szDevice", ctypes.c_wchar * 32),
+        ]
+
+    cx, cy = 0, 0
+    if ref is not None:
+        try:
+            cx = ref.x + max(ref.width, 1) // 2
+            cy = ref.y + max(ref.height, 1) // 2
+        except Exception:
+            pass
+
+    MONITOR_DEFAULTTONEAREST = 2
+    pt = _POINT(cx, cy)
+    hmon = ctypes.windll.user32.MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST)
+    if not hmon:
+        return _primary_work_area()
+
+    mi = _MONITORINFOEX()
+    mi.cbSize = ctypes.sizeof(_MONITORINFOEX)
+    if not ctypes.windll.user32.GetMonitorInfoW(ctypes.c_void_p(hmon), ctypes.byref(mi)):
+        return _primary_work_area()
+
+    rw = mi.rcWork
+    return (rw.left, rw.top, rw.right - rw.left, rw.bottom - rw.top)
+
+
+def _place_window(win: webview.Window, x: int, y: int, w: int, h: int) -> None:
+    w = max(win.min_size[0], int(w))
+    h = max(win.min_size[1], int(h))
+    win.move(int(x), int(y))
+    win.resize(w, h, _FIX_NW)
+
+
+def apply_workspace_layout(mode: int, reference: webview.Window | None = None) -> None:
+    """Açık grafik pencerelerini çalışma alanına göre döşer.
+
+    ``reference``: Düzen menüsüne tıklanan pencere; hangi monitörde
+    döşeneceğini bu pencerenin konumu belirler (ikinci ekrandaysa orası).
+
+    Modlar: 1 = sol|sağ (2), 2 = üst sol/sağ + alt (3), 3 = dört köşe (4),
+    4 = üst|alt (2).
+    """
+    wins = list(webview.windows)
+    if not wins:
+        return
+    wx, wy, ww, wh = _work_area_for_window(reference)
+    if len(wins) == 1:
+        _place_window(wins[0], wx, wy, ww, wh)
+        return
+
+    m = int(mode)
+    if m == 1:
+        col_w = _split_total(ww, 2)
+        rects = [
+            (wx, wy, col_w[0], wh),
+            (wx + col_w[0], wy, col_w[1], wh),
+        ]
+    elif m == 2:
+        row_h = _split_total(wh, 2)
+        col_w = _split_total(ww, 2)
+        h_top = row_h[0]
+        h_bot = row_h[1]
+        rects = [
+            (wx, wy, col_w[0], h_top),
+            (wx + col_w[0], wy, col_w[1], h_top),
+            (wx, wy + h_top, ww, h_bot),
+        ]
+    elif m == 3:
+        col_w = _split_total(ww, 2)
+        row_h = _split_total(wh, 2)
+        w_l, w_r = col_w[0], col_w[1]
+        h_t, h_b = row_h[0], row_h[1]
+        quads = {
+            "LT": (wx, wy, w_l, h_t),
+            "RT": (wx + w_l, wy, w_r, h_t),
+            "LB": (wx, wy + h_t, w_l, h_b),
+            "RB": (wx + w_l, wy + h_t, w_r, h_b),
+        }
+        # Kullanıcı sırası: sağ üst, sağ alt, sol üst, sol alt
+        rects = [quads[k] for k in ("RT", "RB", "LT", "LB")]
+    elif m == 4:
+        row_h = _split_total(wh, 2)
+        rects = [
+            (wx, wy, ww, row_h[0]),
+            (wx, wy + row_h[0], ww, row_h[1]),
+        ]
+    else:
+        return
+
+    n = min(len(wins), len(rects))
+    for i in range(n):
+        x, y, w, h = rects[i]
+        _place_window(wins[i], x, y, w, h)
 
 
 def _bundle_dir() -> Path:
@@ -132,6 +290,9 @@ class WidgetApi:
 
     def open_another_chart(self) -> None:
         spawn_duplicate_chart(self)
+
+    def apply_chart_layout(self, mode: int) -> None:
+        apply_workspace_layout(int(mode), reference=self._win)
 
 
 def spawn_duplicate_chart(source: WidgetApi) -> None:

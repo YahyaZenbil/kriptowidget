@@ -119,6 +119,65 @@
       background: var(--chrome-hover);
       color: var(--chrome-text);
     }
+    .layout-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .btn-layout {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 26px;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--chrome-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-layout:hover {
+      background: var(--chrome-hover);
+      color: var(--chrome-text);
+    }
+    .btn-layout svg {
+      display: block;
+    }
+    .layout-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 220px;
+      padding: 4px;
+      border-radius: 8px;
+      background: var(--chrome-bar);
+      border: 1px solid var(--chrome-border);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      z-index: 500;
+    }
+    .layout-menu[hidden] {
+      display: none !important;
+    }
+    .layout-menu button {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--chrome-text);
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .layout-menu button:hover {
+      background: var(--chrome-hover);
+    }
     .chart-wrap {
       flex: 1;
       min-height: 0;
@@ -207,6 +266,22 @@
     <header class="titlebar">
       <span class="brand pywebview-drag-region">TradingView</span>
       <div class="drag-spacer pywebview-drag-region" aria-hidden="true"></div>
+      <div class="layout-wrap">
+        <button type="button" class="btn-layout" id="btn-layout" title="Pencere düzeni" aria-label="Pencere düzeni" aria-expanded="false" aria-haspopup="true">
+          <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+            <rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.9"/>
+            <rect x="8" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.9"/>
+            <rect x="1" y="8" width="6" height="6" rx="1" fill="currentColor" opacity="0.9"/>
+            <rect x="8" y="8" width="6" height="6" rx="1" fill="currentColor" opacity="0.9"/>
+          </svg>
+        </button>
+        <div class="layout-menu" id="layout-menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-layout="1">2 grafik — sol | sağ</button>
+          <button type="button" role="menuitem" data-layout="2">3 grafik — üst iki + alt şerit</button>
+          <button type="button" role="menuitem" data-layout="3">4 grafik — dört köşe</button>
+          <button type="button" role="menuitem" data-layout="4">2 grafik — üst | alt</button>
+        </div>
+      </div>
       <button type="button" class="btn-plus" id="btn-plus" title="Yeni grafik" aria-label="Yeni grafik">+</button>
       <button type="button" class="btn-close" id="btn-close" title="Kapat" aria-label="Kapat">×</button>
     </header>
@@ -240,6 +315,32 @@ __WIDGET_CONFIG_JSON__
         else window.addEventListener("pywebviewready", fn);
       }
       ready(function () {
+        var btnLayout = document.getElementById("btn-layout");
+        var layoutMenu = document.getElementById("layout-menu");
+        function setLayoutMenuOpen(open) {
+          layoutMenu.hidden = !open;
+          btnLayout.setAttribute("aria-expanded", open ? "true" : "false");
+        }
+        btnLayout.addEventListener("click", function (e) {
+          e.stopPropagation();
+          setLayoutMenuOpen(layoutMenu.hidden);
+        });
+        layoutMenu.querySelectorAll("[data-layout]").forEach(function (item) {
+          item.addEventListener("click", function () {
+            var mode = parseInt(item.getAttribute("data-layout"), 10);
+            if (!isNaN(mode)) {
+              window.pywebview.api.apply_chart_layout(mode);
+            }
+            setLayoutMenuOpen(false);
+          });
+        });
+        document.addEventListener("click", function () {
+          setLayoutMenuOpen(false);
+        });
+        layoutMenu.addEventListener("click", function (e) {
+          e.stopPropagation();
+        });
+
         document.getElementById("btn-plus").addEventListener("click", function () {
           window.pywebview.api.open_another_chart();
         });
